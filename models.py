@@ -16,7 +16,7 @@ def load_audio_and_create_spectrogram(file_path):
 
 
 # Пример загрузки аудио и создания спектрограммы
-file_path = 'C:/Users/secinstaller/Documents/Python Scripts/CNN_models/archive/0 (1).wav'  # Укажите путь к вашему аудиофайлу
+file_path = 'C:/Users/secinstaller/Documents/Python Scripts/CNN_models/archive/0 (1).wav'  # Путь к вашему аудиофайлу
 spectrogram = load_audio_and_create_spectrogram(file_path)
 
 # Изменение формы данных для CNN (добавление оси канала)
