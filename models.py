@@ -4,6 +4,10 @@ import librosa
 import librosa.display
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+import tensorflow as tf
+from tensorflow.keras import layers, models
 
 
 def normalize_spectrogram(spectrogram):
@@ -68,15 +72,79 @@ def split_data(spectrograms, labels, test_size=0.2):
     return train_test_split(spectrograms, labels, test_size=test_size, random_state=42)
 
 
+def pad_sequences_to_same_length(spectrograms):
+    """
+    Дополняет спектрограммы до одинаковой длины.
+
+    :param spectrograms: Список спектрограмм
+    :return: Дополненные спектрограммы в виде массива NumPy
+    """
+    max_length = max(s.shape[0] for s in spectrograms)  # Получаем максимальную длину
+
+    # Дополняем спектрограммы до одинаковой длины с помощью pad_sequences
+    padded_spectrograms = pad_sequences([s.reshape(-1) for s in spectrograms], maxlen=max_length * 128, padding='post',
+                                        dtype='float32')
+
+    return padded_spectrograms.reshape(-1, max_length, 128, 1)
+
+
+def create_cnn_model(input_shape, num_classes):
+    """
+    Создает модель CNN для классификации звуков.
+
+    :param input_shape: Форма входных данных (включая ось канала)
+    :param num_classes: Количество классов для классификации
+    :return: Скомпилированная модель CNN
+    """
+    model = models.Sequential()
+
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=input_shape))
+    model.add(layers.MaxPooling2D(pool_size=(2, 2)))
+
+    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+    model.add(layers.MaxPooling2D(pool_size=(2, 2)))
+
+    model.add(layers.Conv2D(128, (3, 3), activation='relu'))
+    model.add(layers.MaxPooling2D(pool_size=(2, 2)))
+
+    model.add(layers.Flatten())
+
+    model.add(layers.Dense(128, activation='relu'))
+
+    model.add(layers.Dense(num_classes, activation='softmax'))  # Выходной слой для многоклассовой классификации
+
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+    return model
+
+
 # Пример использования функций
-directory_path = 'C:/Users/secinstaller/Documents/Python Scripts/AI_models_micro/1/'#кажите путь к вашей директории с аудиофайлами
+directory_path = 'C:/Users/secinstaller/Documents/Python Scripts/AI_models_micro/archive/'  # Укажите путь к вашей директории с аудиофайлами
 spectrograms, names = load_wav_files_and_convert_to_spectrograms(directory_path)
 
 # Создаем метки для классов (например, извлекая их из имен файлов или используя другую логику)
 labels = [name.split('_')[0] for name in names]  # Предположим, что метка класса - это часть имени файла
 
-# Разделяем данные на обучающую и тестовую выборки
-X_train, X_test, y_train, y_test = split_data(spectrograms, labels)
+# Преобразуем метки в числовой формат с помощью LabelEncoder
+label_encoder = LabelEncoder()
+y_encoded = label_encoder.fit_transform(labels)  # Преобразование строковых меток в числовые
 
-print(f'Форма обучающей выборки: {len(X_train)}')
-print(f'Форма тестовой выборки: {len(X_test)}')
+# Разделяем данные на обучающую и тестовую выборки
+X_train_raw, X_test_raw, y_train_raw, y_test_raw = split_data(spectrograms, y_encoded)
+
+# Дополняем спектрограммы до одинаковой длины
+X_train = pad_sequences_to_same_length(X_train_raw)
+X_test = pad_sequences_to_same_length(X_test_raw)
+
+# Определяем параметры модели
+input_shape = X_train.shape[1:]  # Форма входных данных (включая ось канала)
+num_classes = len(np.unique(y_encoded))  # Количество уникальных классов
+
+# Создаем модель CNN
+model = create_cnn_model(input_shape=input_shape, num_classes=num_classes)
+
+# Обучаем модель на обучающих данных
+model.fit(X_train.astype('float32'), y_train_raw.astype('int'), epochs=10,
+          validation_data=(X_test.astype('float32'), y_test_raw.astype('int')))
+
+print("Модель обучена.")
